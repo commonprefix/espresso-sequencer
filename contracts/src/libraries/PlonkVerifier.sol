@@ -88,11 +88,12 @@ library PlonkVerifier {
     /// @param publicInput The public input fields
     /// @param proof The TurboPlonk proof
     /// @return _ A boolean indicating successful verification, false otherwise
+    // Q: this should be pure?
     function verify(
         IPlonkVerifier.VerifyingKey memory verifyingKey,
         uint256[] memory publicInput,
         IPlonkVerifier.PlonkProof memory proof
-    ) external view returns (bool) {
+    ) external pure returns (bool) {
         _validateProof(proof);
 
         BN254.validateScalarField(BN254.ScalarField.wrap(publicInput[0]));

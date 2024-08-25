@@ -27,6 +27,8 @@ import { LightClientStateUpdateVK as VkLib } from "./libraries/LightClientStateU
 /// - the active stake table commitment<br>
 /// @dev You can use this contract to keep track of its finalized states in safe,
 /// authenticated ways.
+// Q: should use a base storage contract to avoid storage corruption in future upgrades.
+// Q: why is everything virtual? 
 contract LightClient is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     // === Events ===
     //
@@ -82,6 +84,8 @@ contract LightClient is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     address public permissionedProver;
 
     /// @notice a flag that indicates when a permissioned provrer is needed
+    // Q: can lead to inconsistent state if the permissioned prover is set to address(0) but the
+    // permissionedProverEnabled is still true
     bool public permissionedProverEnabled;
 
     /// @notice Max number of seconds worth of state commitments to record based on this block
@@ -133,6 +137,7 @@ contract LightClient is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     /// @param l1BlockTimestamp the block timestamp of l1 when this state update was stored
     /// @param hotShotCommitment The HotShot commitment info of the latest finalized HotShot block
     struct StateHistoryCommitment {
+        // Q: one can convert the blockheight to timestamp and vice versa for Ethereum, why store both?
         uint64 l1BlockHeight;
         uint64 l1BlockTimestamp;
         HotShotCommitment hotShotCommitment;
@@ -200,6 +205,7 @@ contract LightClient is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     /// @return majorVersion The major version of the contract
     /// @return minorVersion The minor version of the contract
     /// @return patchVersion The patch version of the contract
+    // Q: Should this be set during the intialization of the contract?
     function getVersion()
         public
         pure
@@ -227,8 +233,10 @@ contract LightClient is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     ) internal {
         // stake table commitments and threshold cannot be zero, otherwise it's impossible to
         // generate valid proof to move finalized state forward.
+        // Q: Below two lines are confusing?!
         // Whereas blockCommRoot can be zero, if we use special value zero to denote empty tree.
         // feeLedgerComm can be zero, if we optionally support fee ledger yet.
+        // Q: should there be a range check on the threshold?
         if (
             _genesis.viewNum != 0 || _genesis.blockHeight != 0
                 || BN254.ScalarField.unwrap(_genesis.stakeTableBlsKeyComm) == 0
@@ -280,6 +288,7 @@ contract LightClient is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             revert ProverNotPermissioned();
         }
 
+        // Q: how are the viewNum and blockHeight related? same as slot and block number?
         if (
             newState.viewNum <= getFinalizedState().viewNum
                 || newState.blockHeight <= getFinalizedState().blockHeight
@@ -328,6 +337,7 @@ contract LightClient is Initializable, OwnableUpgradeable, UUPSUpgradeable {
 
     /// @notice Verify the Plonk proof, marked as `virtual` for easier testing as we can swap VK
     /// used in inherited contracts.
+    // Q: 
     function verifyProof(LightClientState memory state, IPlonkVerifier.PlonkProof memory proof)
         internal
         virtual
@@ -422,11 +432,14 @@ contract LightClient is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     /// the stateHistoryFirstIndex variable acts as an offset to indicate the starting point for
     /// reading the array,
     /// since the length of the array is not reduced even after deletion.
+    // Q: is there an upper bound on the blocks produced in the stateHistoryRetentionPeriod?
     function updateStateHistory(
         uint64 blockNumber,
         uint64 blockTimestamp,
         LightClientState memory state
     ) internal {
+        // Q: this doesn't delete all outdated elements, only the first one! and 
+        // compares it to not the oldest but the second oldest element.
         if (
             stateHistoryCommitments.length != 0
                 && stateHistoryCommitments[stateHistoryCommitments.length - 1].l1BlockTimestamp
